@@ -1,17 +1,31 @@
 package main
 
 import (
-	"log"
+	"context"
+	"flag"
+	"net/http"
 
-	"github.com/duplexityio/duplexity/pkg/proxyserver"
+	"github.com/duplexityio/duplexity/pkg/messages"
+	"github.com/rancher/remotedialer"
 )
 
+func authorizer(protocol string, address string) bool {
+	// this function should compare the protocol with the address
+	return true
+}
+
+var clientID string
+
 func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	flag.StringVar(&clientID, "clientid", "client", "Client ID")
+	flag.Parse()
 }
 
 func main() {
-	proxy := proxyserver.ProxyServer{Port: 9999}
+	ctx := context.Background()
 
-	proxy.Serve()
+	headers := http.Header{
+		messages.ClientIDHeaderKey: []string{clientID},
+	}
+	remotedialer.ClientConnect(ctx, "ws://localhost:8080/backend", headers, nil, authorizer, nil)
 }

@@ -2,15 +2,13 @@ package router
 
 import (
 	"log"
-	"sync"
 	"time"
 
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 
-	g "github.com/duplexityio/duplexity/pkg/messages"
-	"github.com/gorilla/mux"
+	"github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/rancher/remotedialer"
 )
 
@@ -19,16 +17,25 @@ import (
 // Router ...
 type Router struct {
 	Proxies map[string]*httputil.ReverseProxy
-	l       *sync.Mutex
+	// l       *sync.Mutex
+}
+
+// New ...
+func New() *Router {
+	router := &Router{
+		Proxies: map[string]*httputil.ReverseProxy{},
+		// l:       &sync.Mutex{},
+	}
+	return router
 }
 
 // GetProxy returns a proxy
 func (r Router) GetProxy(clientID string) (*httputil.ReverseProxy, bool) {
-	r.l.Lock()
-	defer r.l.Unlock()
+	// r.l.Lock()
+	// defer r.l.Unlock()
 	proxy, present := r.Proxies[clientID]
 	if !present {
-		log.Panic("no proxy in clientID:", clientID)
+		log.Println("no proxy in clientID:", clientID)
 		return nil, false
 	}
 	return proxy, true
@@ -37,12 +44,11 @@ func (r Router) GetProxy(clientID string) (*httputil.ReverseProxy, bool) {
 // ServeHTTP ...
 func (r Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get the clientID and resource off the req
-	clientIDs, present := req.Header[g.ClientIDHeaderKey]
-	if !present {
-		log.Printf("No clientID in the header")
-		return
+	clientID := req.Header.Get(messages.ClientIDHeaderKey)
+	if clientID == "" {
+		log.Panicf("Router.ServeHTTP: clientID header key not provided")
 	}
-	clientID := clientIDs[0]
+
 	proxy, present := r.GetProxy(clientID)
 	if !present {
 		return
@@ -64,17 +70,9 @@ func (r Router) CreateProxy(server *remotedialer.Server, clientID string) {
 	reverseProxy := &httputil.ReverseProxy{
 		Transport: transport,
 		Director: func(req *http.Request) {
+			resourceURL := req.Header.Get(messages.ResourceHeaderKey)
 
 			// extract the resource out of the headers
-
-			// DO NOT do this
-			vars := mux.Vars(req)
-
-			// get the resource off the headers, DO NOT do this
-			resourceURL, present := vars["resource"]
-			if !present {
-				log.Panicln("No resource provided")
-			}
 
 			log.Printf("Got resourceURL: %s\n", resourceURL)
 
