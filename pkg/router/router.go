@@ -9,39 +9,54 @@ import (
 	"net/http/httputil"
 	"net/url"
 
+	g "github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/gorilla/mux"
 	"github.com/rancher/remotedialer"
 )
 
 // TODO: Test ReverseProxys for race conditions
 
-// Router is
+// Router ...
 type Router struct {
-	proxies map[string]*httputil.ReverseProxy
-	l       sync.Mutex
+	Proxies map[string]*httputil.ReverseProxy
+	l       *sync.Mutex
 }
 
-func (r Router) getProxy(clientID string) *httputil.ReverseProxy {
+// GetProxy returns a proxy
+func (r Router) GetProxy(clientID string) (*httputil.ReverseProxy, bool) {
 	r.l.Lock()
 	defer r.l.Unlock()
-
-	// TODO: Return the correct reverseproxy, this is just to stop go-lint from complaining
-	return &httputil.ReverseProxy{}
+	proxy, present := r.Proxies[clientID]
+	if !present {
+		log.Panic("no proxy in clientID:", clientID)
+		return nil, false
+	}
+	return proxy, true
 }
 
+// ServeHTTP ...
 func (r Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get the clientID and resource off the req
-
-	// grab proxy from proxies map
-	//  proxy = r.getProxy(clientID)
-
+	clientIDs, present := req.Header[g.ClientIDHeaderKey]
+	if !present {
+		log.Printf("No clientID in the header")
+		return
+	}
+	clientID := clientIDs[0]
+	proxy, present := r.GetProxy(clientID)
+	if !present {
+		return
+	}
 	// send request to UserNode using ServeHTTP
+	proxy.ServeHTTP(w, req)
 }
 
+// CreateProxy ...
 func (r Router) CreateProxy(server *remotedialer.Server, clientID string) {
-	// Check if proxy already exists
-	// call getProxy, if it returns... then something has seriously gone wrong
-
+	_, present := r.GetProxy(clientID)
+	if present {
+		log.Fatal("Can't create a proxy which already exists...")
+	}
 	dialer := server.Dialer(clientID, 15*time.Second)
 	transport := &http.Transport{
 		Dial: dialer,
@@ -81,5 +96,5 @@ func (r Router) CreateProxy(server *remotedialer.Server, clientID string) {
 			req.Host = resource.Host
 		},
 	}
-	r.proxies[clientID] = reverseProxy
+	r.Proxies[clientID] = reverseProxy
 }

@@ -5,14 +5,18 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/duplexityio/duplexity/pkg/router"
+	"github.com/duplexityio/duplexity/pkg/server"
 	"github.com/gorilla/mux"
 )
 
 func main() {
 	fmt.Println("Hello world!")
-	// Instantiate server
-	// Instantiate router
 
+	// Instantiate server
+	server := server.Server{}
+	// Instantiate router
+	router := router.Router{}
 	// Serve HTTP for both server and router
 	wsRouter := mux.NewRouter()
 	wsRouter.Handle("/backend", server)
