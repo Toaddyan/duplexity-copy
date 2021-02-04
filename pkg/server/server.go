@@ -17,6 +17,7 @@ type Server struct {
 	Port   int
 }
 
+// New returns a new server
 func New(router *router.Router, port int) *Server {
 	server := &Server{
 		Router: router,
@@ -37,7 +38,7 @@ func (s *Server) Serve() {
 }
 
 func (s *Server) removeProxy(clientID string) {
-	_, present := s.Router.GetProxy(clientID)
+	_, present := s.Router.CheckReverseProxies(clientID)
 	if present {
 		log.Printf("Removing %s from proxies\n", clientID)
 		delete(s.Router.Proxies, clientID)
@@ -50,7 +51,7 @@ func (s *Server) backendHandler(w http.ResponseWriter, req *http.Request) {
 	log.Println("running backendHandler")
 	// Extract the clientID off of the incoming req
 	clientID := req.Header.Get(messages.ClientIDHeaderKey)
-	log.Printf("got client id %s", clientID)
+	log.Printf("Server.backendHandler: got client id %s", clientID)
 	// Send the request onto the remotedialer.Server
 	s.server.ServeHTTP(w, req)
 	// Delete the proxy that has corresponding clientID
@@ -65,7 +66,6 @@ func (s *Server) checkClientAuthentication(clientID string) (authed bool, err er
 		// err = errors.New(Sprintf("authorizer: missing clientID header")
 		return authed, err
 	}
-
 	// TODO: Use OAuth
 	// Validate the client who is connecting
 	// we make sure that they are actually who they claim they are
@@ -75,14 +75,15 @@ func (s *Server) checkClientAuthentication(clientID string) (authed bool, err er
 }
 
 func (s *Server) authorizer(req *http.Request) (clientID string, authed bool, err error) {
-	log.Println("entering Authorizer")
+	log.Printf("Server.authorizer: Authorizing clientID: %s", clientID)
 	// Extract the clientID off of the incoming req
 	clientID = req.Header.Get(messages.ClientIDHeaderKey)
-// TODO ADD ERROR CHECKING 
+	// TODO ADD ERROR CHECKING
 	authed, err = s.checkClientAuthentication(clientID)
 	if !authed {
 		return
 	}
-	s.Router.CreateProxy(s.server, clientID)
+	log.Printf("Server.authorizer: Successful Authorization")
+	s.Router.GetProxy(s.server, clientID)
 	return
 }

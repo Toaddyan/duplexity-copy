@@ -2,6 +2,7 @@ package router
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"net/http"
@@ -17,28 +18,16 @@ import (
 // Router ...
 type Router struct {
 	Proxies map[string]*httputil.ReverseProxy
-	// l       *sync.Mutex
+	l       *sync.Mutex
 }
 
 // New ...
 func New() *Router {
 	router := &Router{
 		Proxies: map[string]*httputil.ReverseProxy{},
-		// l:       &sync.Mutex{},
+		l:       &sync.Mutex{},
 	}
 	return router
-}
-
-// GetProxy returns a proxy
-func (r Router) GetProxy(clientID string) (*httputil.ReverseProxy, bool) {
-	// r.l.Lock()
-	// defer r.l.Unlock()
-	proxy, present := r.Proxies[clientID]
-	if !present {
-		log.Println("no proxy in clientID:", clientID)
-		return nil, false
-	}
-	return proxy, true
 }
 
 // ServeHTTP ...
@@ -49,32 +38,41 @@ func (r Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		log.Panicf("Router.ServeHTTP: clientID header key not provided")
 	}
 
-	proxy, present := r.GetProxy(clientID)
+	proxy, present := r.CheckReverseProxies(clientID)
 	if !present {
 		return
 	}
 	// send request to UserNode using ServeHTTP
+	log.Printf("Router.ServeHTTP: Sending request to UserNode")
 	proxy.ServeHTTP(w, req)
 }
+// CheckReverseProxies will look for a proxy from the Router's proxies map
+func (r Router) CheckReverseProxies(clientID string) (*httputil.ReverseProxy, bool) {
+	r.l.Lock()
+	defer r.l.Unlock()
+	proxy, present := r.Proxies[clientID]
+	if !present {
+		log.Println("Router.checkReverseProxies: No proxy in clientID:", clientID)
+		return nil, false
+	}
+	return proxy, true
+}
 
-// CreateProxy ...
-func (r Router) CreateProxy(server *remotedialer.Server, clientID string) {
-	_, present := r.GetProxy(clientID)
+// GetProxy returns a proxy
+func (r Router) GetProxy(server *remotedialer.Server, clientID string) {
+	_, present := r.CheckReverseProxies(clientID)
 	if present {
-		log.Fatal("Can't create a proxy which already exists...")
+		log.Fatal("Router.GetProxy: Proxy already exists")
 	}
 	dialer := server.Dialer(clientID, 15*time.Second)
 	transport := &http.Transport{
 		Dial: dialer,
-	}
-	reverseProxy := &httputil.ReverseProxy{
+	} 
+	reverseProxy := &httputil.ReverseProxy {
 		Transport: transport,
 		Director: func(req *http.Request) {
 			resourceURL := req.Header.Get(messages.ResourceHeaderKey)
-
-			// extract the resource out of the headers
-
-			log.Printf("Got resourceURL: %s\n", resourceURL)
+			log.Printf("Router.GetProxy: Got resourceURL: %s\n", resourceURL)
 
 			resource, err := url.Parse(resourceURL)
 			if err != nil {
@@ -90,9 +88,9 @@ func (r Router) CreateProxy(server *remotedialer.Server, clientID string) {
 			// req.URL.Scheme = resource.Scheme
 			// req.URL.Host = resource.Host
 			req.URL = resource
-
 			req.Host = resource.Host
 		},
 	}
 	r.Proxies[clientID] = reverseProxy
 }
+
