@@ -46,6 +46,7 @@ func (r Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Router.ServeHTTP: Sending request to UserNode")
 	proxy.ServeHTTP(w, req)
 }
+
 // CheckReverseProxies will look for a proxy from the Router's proxies map
 func (r Router) CheckReverseProxies(clientID string) (*httputil.ReverseProxy, bool) {
 	r.l.Lock()
@@ -67,8 +68,8 @@ func (r Router) GetProxy(server *remotedialer.Server, clientID string) {
 	dialer := server.Dialer(clientID, 15*time.Second)
 	transport := &http.Transport{
 		Dial: dialer,
-	} 
-	reverseProxy := &httputil.ReverseProxy {
+	}
+	reverseProxy := &httputil.ReverseProxy{
 		Transport: transport,
 		Director: func(req *http.Request) {
 			resourceURL := req.Header.Get(messages.ResourceHeaderKey)
@@ -91,6 +92,6 @@ func (r Router) GetProxy(server *remotedialer.Server, clientID string) {
 			req.Host = resource.Host
 		},
 	}
+	log.Println("router.GetProxy: Building Proxy...")
 	r.Proxies[clientID] = reverseProxy
 }
-

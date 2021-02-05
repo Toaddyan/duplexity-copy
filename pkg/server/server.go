@@ -38,6 +38,7 @@ func (s *Server) Serve() {
 }
 
 func (s *Server) removeProxy(clientID string) {
+	log.Println("removeProxy: removing proxy...", clientID)
 	_, present := s.Router.CheckReverseProxies(clientID)
 	if present {
 		log.Printf("Removing %s from proxies\n", clientID)
@@ -75,9 +76,9 @@ func (s *Server) checkClientAuthentication(clientID string) (authed bool, err er
 }
 
 func (s *Server) authorizer(req *http.Request) (clientID string, authed bool, err error) {
-	log.Printf("Server.authorizer: Authorizing clientID: %s", clientID)
 	// Extract the clientID off of the incoming req
 	clientID = req.Header.Get(messages.ClientIDHeaderKey)
+	log.Printf("Server.authorizer: Authorizing clientID: %s", clientID)
 	// TODO ADD ERROR CHECKING
 	authed, err = s.checkClientAuthentication(clientID)
 	if !authed {

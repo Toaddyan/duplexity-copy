@@ -14,7 +14,7 @@ var config struct {
 }
 
 func init() {
-	log.SetFlags(log.Llongfile)
+	log.SetFlags(log.LstdFlags | log.Llongfile)
 
 	err := env.Parse(&config)
 	if err != nil {

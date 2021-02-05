@@ -24,6 +24,7 @@ var config struct {
 }
 
 func init() {
+	log.SetFlags(log.LstdFlags | log.Llongfile)
 	err := env.Parse(&config)
 	if err != nil {
 		log.Fatalf("%+v\n", err)

@@ -22,5 +22,20 @@ services:
     environment:
       - HTTP_PORT=8080
 
+  proxy:
+    image: proxy:latest
+    build: 
+      context: .
+      dockerfile: ./cmd/proxy/Dockerfile
+    ports:
+      - "9090:9090"
+
+  debug:
+    image: mendhak/http-https-echo:17 
+    ports:
+      - "7070:80"
+
   hello:
     image: tutum/hello-world
+    ports:
+      - "3030:80"
