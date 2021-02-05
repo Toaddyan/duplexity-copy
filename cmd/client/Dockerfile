@@ -1,8 +1,25 @@
-FROM golang:1.15.7-alpine as builder
+FROM golang:alpine AS builder
 
-WORKDIR /duplexity/client
-COPY main.go .
+# Create /duplexity and ~/.ssh
+RUN mkdir -p /duplexity ~/.ssh
 
-RUN ["go","mod","download"]
+# Install necessary build tools
+RUN apk update && apk upgrade && apk add --no-cache bash git openssh
 
-RUN ["go", "build", "-o", ]
+# Copy repo into build container
+COPY . /duplexity
+
+# Move to the client
+WORKDIR /duplexity/cmd/client
+# Build binary in /duplexity called client
+RUN ["go", "build", "-o", "/duplexity/client"]
+
+FROM alpine
+
+# Create /duplexity and move there
+WORKDIR /duplexity
+# Copy binary from builder
+COPY --from=builder /duplexity/client .
+
+# Run binary
+CMD ./client

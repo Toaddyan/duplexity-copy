@@ -1,0 +1,26 @@
+version: "3.3"
+
+services:
+  client:
+    image: client:latest
+    build: 
+      context: .
+      dockerfile: ./cmd/client/Dockerfile
+    environment:
+      - WEBSOCKET_URI=ws://websocket:8080
+      - CLIENT_ID=client
+    depends_on:
+      - websocket
+
+  websocket:
+    image: websocket:latest
+    build: 
+      context: .
+      dockerfile: ./cmd/websocket/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - HTTP_PORT=8080
+
+  hello:
+    image: tutum/hello-world

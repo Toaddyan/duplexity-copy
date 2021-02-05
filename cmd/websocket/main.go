@@ -4,23 +4,30 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/caarlos0/env"
 	"github.com/duplexityio/duplexity/pkg/router"
 	"github.com/duplexityio/duplexity/pkg/server"
 )
 
+var config struct {
+	HTTPPort int `env:"HTTP_PORT" envDefault:"8080"`
+}
+
 func init() {
 	log.SetFlags(log.Llongfile)
+
+	err := env.Parse(&config)
+	if err != nil {
+		log.Fatalf("%+v\n", err)
+	}
+	log.Printf("%+v\n", config)
 }
 func main() {
 	fmt.Println("Hello world!")
 
-	// implement a server.serve
-	//   does lines 30-35
-	// Instantiate server
 	router := router.New()
-	server := server.New(router, 8080)
+	server := server.New(router, config.HTTPPort)
 	server.Serve()
-	// Instantiate router
 
 	// Serve HTTP for both server and router
 	// wsRouter := mux.NewRouter()
