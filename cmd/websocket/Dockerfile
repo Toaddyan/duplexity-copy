@@ -11,6 +11,7 @@ COPY . /duplexity
 
 # Move to the client
 WORKDIR /duplexity/cmd/websocket
+
 # Build binary in /duplexity called websocket
 RUN ["go", "build", "-o", "/duplexity/websocket"]
 

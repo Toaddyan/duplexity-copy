@@ -5,7 +5,9 @@ services:
     image: client:latest
     build: 
       context: .
-      dockerfile: ./cmd/client/Dockerfile
+      dockerfile: ./cmd/Dockerfile
+      args:
+        - APPTYPE=client
     environment:
       - WEBSOCKET_URI=ws://websocket:8080
       - CLIENT_ID=client
@@ -16,7 +18,9 @@ services:
     image: websocket:latest
     build: 
       context: .
-      dockerfile: ./cmd/websocket/Dockerfile
+      dockerfile: ./cmd/Dockerfile
+      args:
+        - APPTYPE=websocket
     ports:
       - "8080:8080"
     environment:
@@ -26,7 +30,9 @@ services:
     image: proxy:latest
     build: 
       context: .
-      dockerfile: ./cmd/proxy/Dockerfile
+      dockerfile: ./cmd/Dockerfile
+      args:
+        - APPTYPE=proxy
     ports:
       - "9090:9090"
 
