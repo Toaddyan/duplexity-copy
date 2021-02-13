@@ -57,8 +57,9 @@ func (proxy Proxy) director(req *http.Request) {
 	// req.Header.Set(messages.ResourceHeaderKey, "http://localhost:1234")
 	req.Header.Set(messages.ResourceHeaderKey, "http://ipinfo.io")
 	// THIS SHOULD BE A LOOK UP INTO THE DATABASE FOR WHAT THE USER WANTS TO EXPOSE
+	
 
-	resource, err := url.Parse("http://localhost:8080/frontend")
+	resource, err := url.Parse("http://websocket:8080/frontend")
 	if err != nil {
 		log.Panicln("director: can't parse url websocket/frontend ")
 	}

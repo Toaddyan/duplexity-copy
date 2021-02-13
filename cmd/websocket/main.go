@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/caarlos0/env"
+	"github.com/caarlos0/env/v6"
 	"github.com/duplexityio/duplexity/pkg/router"
 	"github.com/duplexityio/duplexity/pkg/server"
 )

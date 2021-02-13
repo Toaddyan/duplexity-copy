@@ -68,6 +68,19 @@ func (s *Server) checkClientAuthentication(clientID string) (authed bool, err er
 		return authed, err
 	}
 	// TODO: Use OAuth
+	
+
+
+
+
+	// cfg := oauth.NewClientConfig("https://accounts.google.com")
+
+	// http.HandleFunc("/", cfg.LoginUser)
+	// http.HandleFunc("/auth/google/callback", cfg.CallbackHandler)
+
+	// log.Printf("listening on http://%s/", "127.0.0.1:5556")
+	// log.Fatal(http.ListenAndServe("127.0.0.1:5556", nil))
+
 	// Validate the client who is connecting
 	// we make sure that they are actually who they claim they are
 	// If they are not who they say they are, we return authed = false
