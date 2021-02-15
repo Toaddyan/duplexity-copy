@@ -1,5 +1,23 @@
 #!/usr/bin/env bash
 
+# We had some weird trouble trying to get protoc to work. Here's what we did to fix it:
+# 827  go get -u github.com/golang/protobuf/protoc-gen-go
+# 828  ls
+# 829  ./pb/compile-proto.sh 
+# 830  clear
+# 831  ls
+# 832  realpath ~/proto-path/bin/
+# 833  vim ~/.bashrc 
+# 834  source ~/.bashrc 
+# 835  clear
+# 836  ls
+# 837  pb/compile-proto.sh 
+# 838  clear
+# 839  ls
+# 840  go run main.go 
+# 841  go get -u google.golang.org/grpc
+
+
 # Location of this script
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)" # https://stackoverflow.com/a/246128
 
