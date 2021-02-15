@@ -32,22 +32,21 @@ func init() {
 	log.Printf("%+v\n", config)
 }
 
-
 func main() {
-	// Redirect the user to oauth service. 
-	//  wait until user autenticates 
+	// Redirect the user to oauth service.
+	//  wait until user autenticates
 
+	// Check -> Am I authenticated...
 
-	// Check -> Am I authenticated... 
-	
-	//  in linux machine... it goes into ~/.config 
+	//  in linux machine... it goes into ~/.config
 	//  Be able to look for this in platform agnostic way
-	//  hydrate a jwt and dehydrate a JWT  encode decode ? 
+	//  hydrate a jwt and dehydrate a JWT  encode decode ?
 	ctx := context.Background()
 
 	headers := http.Header{
 		// add to the headers... here are the credentials.
 		messages.ClientIDHeaderKey: []string{config.ClientID},
+		messages.ResourceHeaderKey: []string{"http://hello"},
 	}
 	remotedialer.ClientConnect(ctx, fmt.Sprintf("%s/backend", config.WebsocketURI), headers, nil, authorizer, nil)
 }

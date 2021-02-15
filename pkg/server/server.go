@@ -5,33 +5,44 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/duplexityio/duplexity/cmd/backend/pb"
 	"github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/duplexityio/duplexity/pkg/router"
 	"github.com/rancher/remotedialer"
+	"google.golang.org/grpc"
 )
 
 // Server ...
 type Server struct {
-	server *remotedialer.Server
-	Router *router.Router
-	Port   int
+	server            *remotedialer.Server
+	Router            *router.Router
+	Port              int
+	Hostname          string
+	backendConnection *grpc.ClientConn
 }
 
 // New returns a new server
-func New(router *router.Router, port int) *Server {
+func New(router *router.Router, port int, hostname string, backendGrpcServer string) *Server {
+	conn, err := grpc.Dial(backendGrpcServer, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalln("Backend gRPC server failed to connect")
+	}
 	server := &Server{
-		Router: router,
-		Port:   port,
+		Router:            router,
+		Port:              port,
+		Hostname:          hostname,
+		backendConnection: conn,
 	}
 	return server
 }
 
-// Serve ...
+// Serve HTTP for websocket server
 func (s *Server) Serve() {
 	s.server = remotedialer.New(s.authorizer, remotedialer.DefaultErrorWriter)
-	// httpRouter := mux.NewRouter()
-	http.HandleFunc("/backend", s.backendHandler)
+
+	http.HandleFunc("/backend", s.remotedialerHandler)
 	http.HandleFunc("/frontend", s.Router.ServeHTTP)
+	http.HandleFunc("/control", s.controlHandler)
 
 	log.Println("Starting server")
 	log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", s.Port), nil))
@@ -47,17 +58,41 @@ func (s *Server) removeProxy(clientID string) {
 	log.Panic("clientID not present")
 }
 
-// ServeHttp is a wrapper around remotedialer
-func (s *Server) backendHandler(w http.ResponseWriter, req *http.Request) {
-	log.Println("running backendHandler")
+func (s *Server) controlHandler(w http.ResponseWriter, req *http.Request) {
+	log.Println("Running controlHandler")
+	// TODO: Make it such that backendHandler does not begin the remotedialer WebSocket unless a valid control WebSocket
+	//       is established.
+
+}
+
+// remotedialerHandler wraps around the remotedialer.Server.ServeHTTP
+func (s *Server) remotedialerHandler(w http.ResponseWriter, req *http.Request) {
+	log.Println("Running remotedialerHandler")
 	// Extract the clientID off of the incoming req
-	clientID := req.Header.Get(messages.ClientIDHeaderKey)
-	log.Printf("Server.backendHandler: got client id %s", clientID)
+	hostname := req.Header.Get(messages.ClientIDHeaderKey)
+	log.Printf("Server.remotedialerHandler: got client id %s", hostname)
+
+	// TODO: Fix this hack
+	ctx := req.Context()
+	resource := req.Header.Get(messages.ResourceHeaderKey)
+	client := pb.NewBackendClient(s.backendConnection)
+	_, err := client.RegisterConnection(ctx, &pb.RegisterConnectionRequest{
+		RequestId: "regster connection request id",
+		Connection: &pb.Connection{
+			UserId:    hostname,
+			Hostname:  hostname,
+			Websocket: s.Hostname,
+			Resource:  resource,
+		},
+	})
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// Send the request onto the remotedialer.Server
 	s.server.ServeHTTP(w, req)
 	// Delete the proxy that has corresponding clientID
-	s.removeProxy(clientID)
-
+	s.removeProxy(hostname)
 }
 
 func (s *Server) checkClientAuthentication(clientID string) (authed bool, err error) {
@@ -68,10 +103,6 @@ func (s *Server) checkClientAuthentication(clientID string) (authed bool, err er
 		return authed, err
 	}
 	// TODO: Use OAuth
-	
-
-
-
 
 	// cfg := oauth.NewClientConfig("https://accounts.google.com")
 

@@ -1,0 +1,11 @@
+syntax = "proto3";
+package backend;
+
+option go_package = ".;pb";
+
+message Connection {
+    string user_id = 1;
+    string websocket = 2;
+    string hostname = 3;
+    string resource = 4;
+}

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"os"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/duplexityio/duplexity/pkg/router"
@@ -10,7 +10,9 @@ import (
 )
 
 var config struct {
-	HTTPPort int `env:"HTTP_PORT" envDefault:"8080"`
+	HTTPPort          int    `env:"HTTP_PORT" envDefault:"8080"`
+	Hostname          string `env:"WEBSOCKET_HOSTNAME"`
+	BackendGrpcServer string `env:"BACKEND_GRPC_SERVER" envDefaut:"localhost:9378"`
 }
 
 func init() {
@@ -21,19 +23,21 @@ func init() {
 		log.Fatalf("%+v\n", err)
 	}
 	log.Printf("%+v\n", config)
+
+	if config.Hostname == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("Could not determine hostname: %v\n", err)
+		}
+		config.Hostname = hostname
+	}
 }
+
 func main() {
-	fmt.Println("Hello world!")
-
+	// Forward-facing router
 	router := router.New()
-	server := server.New(router, config.HTTPPort)
+
+	// Websocket server
+	server := server.New(router, config.HTTPPort, config.Hostname, config.BackendGrpcServer)
 	server.Serve()
-
-	// Serve HTTP for both server and router
-	// wsRouter := mux.NewRouter()
-	// wsRouter.Handle("/backend", server)
-	// wsRouter.Handle("/frontend", router)
-
-	// log.Println("Starting server")
-	// log.Fatalln(http.ListenAndServe(":8080", wsRouter))
 }

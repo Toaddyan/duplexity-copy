@@ -8,20 +8,33 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/duplexityio/duplexity/cmd/backend/pb"
 	"github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/gorilla/mux"
+	"google.golang.org/grpc"
 )
 
 // Proxy ...
 type Proxy struct {
-	Port         int
-	reverseproxy *httputil.ReverseProxy
+	Port              int
+	reverseproxy      *httputil.ReverseProxy
+	backendConnection *grpc.ClientConn
 }
 
 // New creates proxy struct
-func New(port int) *Proxy {
+func New(port int, backendGrpcServer string) *Proxy {
+	log.Println("Creating a new Proxy")
+	// TODO: Fatal if doesn't finish within 15 seconds
+	conn, err := grpc.Dial(backendGrpcServer, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalln("Backend gRPC server failed to connect")
+	}
+
+	log.Println("heyo")
+
 	proxy := &Proxy{
-		Port: port,
+		Port:              port,
+		backendConnection: conn,
 	}
 
 	proxy.reverseproxy = &httputil.ReverseProxy{
@@ -32,8 +45,15 @@ func New(port int) *Proxy {
 
 // Serve will start the proxy service
 func (proxy Proxy) Serve() {
+	log.Println("Starting Proxy.Serve")
+
+	defer proxy.backendConnection.Close()
+
+	log.Println("yo")
+
 	router := mux.NewRouter()
 	router.HandleFunc("/", proxy.reverseproxy.ServeHTTP)
+
 	log.Printf("Serving HTTP on %d\n", proxy.Port)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", proxy.Port), router)
 	if err != nil {
@@ -41,27 +61,34 @@ func (proxy Proxy) Serve() {
 	}
 
 	log.Println("Bye bye")
+
 }
 
 func (proxy Proxy) director(req *http.Request) {
 	log.Printf("New req: %#v\n", req)
 
-	// host := req.Host
-	// clientID.duplexity.io
-	clientID := strings.Split(req.Host, ".")[0]
-	log.Println("director: clientID: ", clientID)
-	req.Header.Set(messages.ClientIDHeaderKey, clientID)
+	ctx := req.Context()
 
-	// lookup on the host
-	// TODO: Do a lookup on the backend, to figure out what websocket the user node is connected to
-	// req.Header.Set(messages.ResourceHeaderKey, "http://localhost:1234")
-	req.Header.Set(messages.ResourceHeaderKey, "http://ipinfo.io")
-	// THIS SHOULD BE A LOOK UP INTO THE DATABASE FOR WHAT THE USER WANTS TO EXPOSE
-	
+	hostname := strings.Split(req.Host, ".")[0]
+	log.Println("director: clientID: ", hostname)
+	req.Header.Set(messages.ClientIDHeaderKey, hostname)
 
-	resource, err := url.Parse("http://websocket:8080/frontend")
+	// Create a new backend client
+	client := pb.NewBackendClient(proxy.backendConnection)
+	// Do a getConnection request on Backend service
+	response, err := client.GetConnection(ctx, &pb.GetConnectionRequest{
+		RequestId: "SomeGetConnectionRequest",
+		Hostname:  hostname,
+	})
 	if err != nil {
-		log.Panicln("director: can't parse url websocket/frontend ")
+		//TODO: make this 404
+		log.Panicln("Couldn't get valid Connection Request")
+	}
+
+	req.Header.Set(messages.ResourceHeaderKey, response.Connection.GetResource())
+	resource, err := url.Parse(fmt.Sprintf("http://%s:8080/frontend", response.Connection.GetWebsocket()))
+	if err != nil {
+		log.Panicln("director: can't parse url websocket/frontend")
 	}
 
 	// req.URL.Scheme = resource.Scheme
