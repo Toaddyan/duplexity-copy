@@ -2,6 +2,6 @@ package main
 
 import api "github.com/duplexityio/duplexity/cmd/backend/pb"
 
-type server struct {
+type service struct {
 	api.UnimplementedBackendServer
 }

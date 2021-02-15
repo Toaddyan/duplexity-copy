@@ -9,18 +9,32 @@ import (
 	"syscall"
 
 	"github.com/caarlos0/env/v6"
-	api "github.com/duplexityio/duplexity/cmd/backend/pb"
+	"github.com/duplexityio/duplexity/cmd/backend/pb"
+	"github.com/go-redis/redis"
 	"google.golang.org/grpc"
+)
+
+var (
+	// Redis is the client used to communicate withe Redis
+	Redis *redis.Client
 )
 
 var config struct {
 	BackendServerURI string `env:"BACKEND_SERVER_URI" envDefault:"0.0.0.0:9378"`
+	RedisURI         string `env:"REDIS_URI" envDefault:"localhost:6379"`
 }
 
 func init() {
+	log.SetFlags(log.LstdFlags | log.Llongfile)
+
 	if err := env.Parse(&config); err != nil {
 		fmt.Printf("%+v\n", err)
 	}
+	Redis = redis.NewClient(&redis.Options{
+		Addr:     config.RedisURI,
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
 }
 
 func main() {
@@ -33,10 +47,10 @@ func main() {
 	grpcServer := grpc.NewServer()
 
 	// Create new backendServer
-	backendServer := &server{}
+	backendService := &service{}
 
-	log.Println("Registering Backend server to gRPC server")
-	api.RegisterBackendServer(grpcServer, backendServer)
+	log.Println("Registering backend service to gRPC server")
+	pb.RegisterBackendServer(grpcServer, backendService)
 
 	go func() {
 		log.Println("Opening gRPC server to world")
