@@ -14,14 +14,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Proxy ...
+// Proxy is a reverse proxy responsible for finding where our client is. 
 type Proxy struct {
 	Port              int
 	reverseproxy      *httputil.ReverseProxy
 	backendConnection *grpc.ClientConn
 }
 
-// New creates proxy struct
+// New creates new Proxy
 func New(port int, backendGrpcServer string) *Proxy {
 	log.Println("Creating a new Proxy")
 	// TODO: Fatal if doesn't finish within 15 seconds
@@ -43,13 +43,11 @@ func New(port int, backendGrpcServer string) *Proxy {
 	return proxy
 }
 
-// Serve will start the proxy service
+// Serve starts the proxy service
 func (proxy Proxy) Serve() {
 	log.Println("Starting Proxy.Serve")
 
 	defer proxy.backendConnection.Close()
-
-	log.Println("yo")
 
 	router := mux.NewRouter()
 	router.HandleFunc("/", proxy.reverseproxy.ServeHTTP)
@@ -63,7 +61,7 @@ func (proxy Proxy) Serve() {
 	log.Println("Bye bye")
 
 }
-
+// director is a custom controller for the reverse proxy
 func (proxy Proxy) director(req *http.Request) {
 	log.Printf("New req: %#v\n", req)
 
@@ -71,7 +69,7 @@ func (proxy Proxy) director(req *http.Request) {
 
 	hostname := strings.Split(req.Host, ".")[0]
 	log.Println("director: clientID: ", hostname)
-	req.Header.Set(messages.ClientIDHeaderKey, hostname)
+	req.Header.Set(messages.HostnameHeaderKey, hostname)
 
 	// Create a new backend client
 	client := pb.NewBackendClient(proxy.backendConnection)

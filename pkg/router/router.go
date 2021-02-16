@@ -13,9 +13,7 @@ import (
 	"github.com/rancher/remotedialer"
 )
 
-// TODO: Test ReverseProxys for race conditions
-
-// Router ...
+// Router is a controller to map
 type Router struct {
 	Proxies map[string]*httputil.ReverseProxy
 	l       *sync.Mutex
@@ -30,42 +28,42 @@ func New() *Router {
 	return router
 }
 
-// ServeHTTP ...
+// ServeHTTP starts the control service for websocket to hosts
 func (r Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get the clientID and resource off the req
-	clientID := req.Header.Get(messages.ClientIDHeaderKey)
-	if clientID == "" {
+	hostname := req.Header.Get(messages.HostnameHeaderKey)
+	if hostname == "" {
 		log.Panicf("Router.ServeHTTP: clientID header key not provided")
 	}
 
-	proxy, present := r.CheckReverseProxies(clientID)
+	proxy, present := r.CheckReverseProxies(hostname)
 	if !present {
 		return
 	}
-	// send request to UserNode using ServeHTTP
+	// send request to user using ServeHTTP
 	log.Printf("Router.ServeHTTP: Sending request to UserNode")
 	proxy.ServeHTTP(w, req)
 }
 
-// CheckReverseProxies will look for a proxy from the Router's proxies map
-func (r Router) CheckReverseProxies(clientID string) (*httputil.ReverseProxy, bool) {
+// CheckReverseProxies ensures that every host has one Proxy
+func (r Router) CheckReverseProxies(hostname string) (*httputil.ReverseProxy, bool) {
 	r.l.Lock()
 	defer r.l.Unlock()
-	proxy, present := r.Proxies[clientID]
+	proxy, present := r.Proxies[hostname]
 	if !present {
-		log.Println("Router.checkReverseProxies: No proxy in clientID:", clientID)
+		log.Println("Router.checkReverseProxies: No proxy in hostname:", hostname)
 		return nil, false
 	}
 	return proxy, true
 }
 
-// GetProxy returns a proxy
-func (r Router) GetProxy(server *remotedialer.Server, clientID string) {
-	_, present := r.CheckReverseProxies(clientID)
+// GetProxy returns a Proxy
+func (r Router) GetProxy(server *remotedialer.Server, hostname string) {
+	_, present := r.CheckReverseProxies(hostname)
 	if present {
 		log.Fatal("Router.GetProxy: Proxy already exists")
 	}
-	dialer := server.Dialer(clientID, 15*time.Second)
+	dialer := server.Dialer(hostname, 15*time.Second)
 	transport := &http.Transport{
 		Dial: dialer,
 	}
@@ -93,5 +91,5 @@ func (r Router) GetProxy(server *remotedialer.Server, clientID string) {
 		},
 	}
 	log.Println("router.GetProxy: Building Proxy...")
-	r.Proxies[clientID] = reverseProxy
+	r.Proxies[hostname] = reverseProxy
 }

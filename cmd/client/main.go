@@ -10,7 +10,7 @@ import (
 	"github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/rancher/remotedialer"
 )
-
+// TODO: 
 func authorizer(protocol string, address string) bool {
 	// this function should compare the protocol with the address
 	return true
@@ -45,7 +45,7 @@ func main() {
 
 	headers := http.Header{
 		// add to the headers... here are the credentials.
-		messages.ClientIDHeaderKey: []string{config.ClientID},
+		messages.HostnameHeaderKey: []string{config.ClientID},
 		messages.ResourceHeaderKey: []string{"http://hello"},
 	}
 	remotedialer.ClientConnect(ctx, fmt.Sprintf("%s/backend", config.WebsocketURI), headers, nil, authorizer, nil)

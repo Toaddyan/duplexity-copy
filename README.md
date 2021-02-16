@@ -36,7 +36,7 @@
 ## Decisions 
 We are deciding to hit the auth service directly 
 - pros: easy 
-- cons: scalable 
+- cons: not scalable 
 
 We are deciding for the proxy to hit the backend service instead of the REDIS DB 
 - Pros: cleaner architecture 
@@ -44,9 +44,11 @@ We are deciding for the proxy to hit the backend service instead of the REDIS DB
 
 websocket Hit control first 
 
-
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDI4lur1lVGKRJf6nisjAPjsjTn9V/JGdHBdkDV/NPa/yOfnG7tcPe+BUpAbeLdsWKwJUfJBlVC8e7BctrrDiaofYQUzIbf82Rs471Bb69EwbZSmIdeYGfkoUxiDTJnVVwsgrP/PeUxDyNr3lut/Tpn2qfi4ekEONiedLW6pFvz+pikkHYBKZTvQ69A1ZcwA+AKEf0rFQ5njyfQh3x7jIlR5866EzWlp6ZYl7mv6RxQEpu1eHxsMk02RG/pnff2FQMlmLhQzT+hWhNzy6baKdj3K08JH3IEMcx+4UrtFB0Dd+gzxF5IilbpAXpwRmRUiOZrdigo80M32DnqqcLG9S6n thyan@ad3.ucdavis.edu@pc42
-
-
 The websockets themselves have many clients to them. 
 If i'm trying to target a specific client, then we need to have all of these websockets subscribed to a channel. 
+
+
+## Broker 
+
+Who is the broker? 
+The websocket should be a broker to the clients 
