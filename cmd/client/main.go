@@ -2,25 +2,37 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
-	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/caarlos0/env"
-	"github.com/duplexityio/duplexity/pkg/messages"
-	"github.com/rancher/remotedialer"
+	"github.com/gorilla/websocket"
 )
-// TODO: 
-func authorizer(protocol string, address string) bool {
-	// this function should compare the protocol with the address
-	return true
-}
 
-var clientID string
-
+// TODO add resource key in flags
 var config struct {
 	WebsocketURI string `env:"WEBSOCKET_URI" envDefault:"ws://localhost:8080"`
 	ClientID     string `env:"CLIENT_ID" envDefault:"client"`
+}
+
+var (
+	controlConnection *websocket.Conn
+	disconnectChan    chan bool
+	messagesChan      chan jsonCommand
+)
+
+func authorizer(protocol, address string) bool {
+	return true
+}
+func startControlConnection(websocketURI, clientID string) *websocket.Conn {
+	url := url.URL{Scheme: "ws", Host: "websocket:8080", Path: "/control"}
+	conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+	if err != nil {
+		log.Fatal("dial", err)
+	}
+	return conn
 }
 
 func init() {
@@ -31,22 +43,44 @@ func init() {
 	}
 	log.Printf("%+v\n", config)
 }
-
 func main() {
-	// Redirect the user to oauth service.
-	//  wait until user autenticates
-
-	// Check -> Am I authenticated...
-
-	//  in linux machine... it goes into ~/.config
-	//  Be able to look for this in platform agnostic way
-	//  hydrate a jwt and dehydrate a JWT  encode decode ?
 	ctx := context.Background()
-
-	headers := http.Header{
-		// add to the headers... here are the credentials.
-		messages.HostnameHeaderKey: []string{config.ClientID},
-		messages.ResourceHeaderKey: []string{"http://hello"},
+	resource := flag.String("resource", "MISSING", "Application to be hauled")
+	if *resource == "MISSING" {
+		log.Fatal("need resource")
 	}
-	remotedialer.ClientConnect(ctx, fmt.Sprintf("%s/backend", config.WebsocketURI), headers, nil, authorizer, nil)
+
+	controlConnection = startControlConnection(config.WebsocketURI, config.ClientID)
+	defer controlConnection.Close()
+	// Listen for server Responses
+	go listen()
+
+	// Ensure connection at server is ok
+	write(getDataURI)
+	uriResponse := <-messagesChan
+	err := setWebsocketURI(uriResponse)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Check if server is ok.
+	write(registerConnection)
+	connectionResponse := <-messagesChan
+	go startConnection(ctx, *resource, connectionResponse)
+
+	ticker := time.NewTicker((time.Minute))
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-disconnectChan:
+			log.Println("Disconnect successful")
+			return
+		case <-ticker.C:
+			write(updateTTL)
+		default:
+			log.Println("Not a supported command")
+		}
+	}
+
 }

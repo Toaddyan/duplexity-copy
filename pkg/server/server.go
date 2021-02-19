@@ -4,132 +4,121 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
-	"github.com/duplexityio/duplexity/cmd/backend/pb"
 	"github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/duplexityio/duplexity/pkg/router"
+	"github.com/gorilla/websocket"
 	"github.com/rancher/remotedialer"
 	"google.golang.org/grpc"
 )
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
 // Server is a remotedialer websocket that also contains a reverse proxy to each client
 type Server struct {
-	server            *remotedialer.Server
-	Router            *router.Router
-	Port              int
-	Hostname          string
-	backendConnection *grpc.ClientConn
+	l          sync.Mutex
+	server     *remotedialer.Server
+	Router     *router.Router
+	Port       int
+	WsHostName string
+	hub        hub
 }
 
 // New returns a new Server
-func New(router *router.Router, port int, hostname string, backendGrpcServer string) *Server {
-	// Connect to backend service 
+func New(router *router.Router, port int, wsHostname string, backendGrpcServer string) *Server {
+	// Connect to backend service
 	conn, err := grpc.Dial(backendGrpcServer, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalln("Backend gRPC server failed to connect")
 	}
 	server := &Server{
-		Router:            router,
-		Port:              port,
-		Hostname:          hostname,
-		backendConnection: conn,
+		Router:     router,
+		Port:       port,
+		WsHostName: wsHostname,
+		hub:        newHub(conn),
 	}
 	return server
 }
 
 // Serve HTTP for websocket server
-func (ws *Server) Serve() {
-	ws.server = remotedialer.New(ws.authorizer, remotedialer.DefaultErrorWriter)
+func (s *Server) Serve() {
+	s.server = remotedialer.New(s.authorizer, remotedialer.DefaultErrorWriter)
+	// turn on the hub in background
+	go s.hub.run()
 
-	http.HandleFunc("/backend", ws.remotedialerHandler)
-	http.HandleFunc("/frontend", ws.Router.ServeHTTP)
-	http.HandleFunc("/control", ws.controlHandler)
+	http.HandleFunc("/backend", s.remotedialerHandler)
+	http.HandleFunc("/frontend", s.Router.ServeHTTP)
+	http.HandleFunc("/control", s.controlHandler)
 
 	log.Println("Starting server")
-	log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", ws.Port), nil))
+	log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", s.Port), nil))
 }
 
-func (ws *Server) removeProxy(clientID string) {
+func (s *Server) removeProxy(clientID string) {
 	log.Println("removeProxy: removing proxy...", clientID)
-	_, present := ws.Router.CheckReverseProxies(clientID)
+	_, present := s.Router.CheckReverseProxies(clientID)
 	if present {
 		log.Printf("Removing %s from proxies\n", clientID)
-		delete(ws.Router.Proxies, clientID)
+		delete(s.Router.Proxies, clientID)
 	}
 	log.Panic("clientID not present")
 }
 
-func (ws *Server) controlHandler(w http.ResponseWriter, req *http.Request) {
-	log.Println("Running controlHandler")
-	// TODO: Make it such that backendHandler does not begin the remotedialer WebSocket unless a valid control WebSocket
-	//       is established.
+func (s *Server) getClient(hostname string) (*Client, bool) {
+	client, present := s.hub.clientMap[hostname]
+	return client, present
+}
 
+func (s *Server) readControlInput(req *http.Request, ws *websocket.Conn) {
+	for {
+		_, rawMessage, err := ws.ReadMessage()
+		if err != nil {
+			log.Println("could not read: ", err)
+		}
+		cmdStruct := byteToStruct(rawMessage)
+
+		switch cmdStruct.command {
+		case getDataURI:
+			s.respondDataURI(cmdStruct, ws, req)
+		case registerConnection:
+			s.responseConnection(cmdStruct, ws)
+		case disconnect:
+			s.disconnect(cmdStruct.clientID, ws)
+		case updateTTL:
+			log.Println("want to update ttl here")
+
+		default:
+			log.Println("unsupported command")
+		}
+	}
+}
+
+func (s *Server) controlHandler(w http.ResponseWriter, req *http.Request) {
+	log.Println("Running controlHandler")
+
+	// websocket.upgrade into a websocket connection
+	ws, err := upgrader.Upgrade(w, req, nil)
+	if err != nil {
+		log.Fatal("can't upgrade to websocket")
+	}
+
+	s.readControlInput(req, ws)
 }
 
 // remotedialerHandler wraps around the remotedialer.Server.ServeHTTP
-func (ws *Server) remotedialerHandler(w http.ResponseWriter, req *http.Request) {
+func (s *Server) remotedialerHandler(w http.ResponseWriter, req *http.Request) {
 	log.Println("Running remotedialerHandler")
 	// Extract the clientID off of the incoming req
 	hostname := req.Header.Get(messages.HostnameHeaderKey)
 	log.Printf("Server.remotedialerHandler: got client id %s", hostname)
-
-	// TODO: Fix this hack
-	ctx := req.Context()
-	resource := req.Header.Get(messages.ResourceHeaderKey)
-	client := pb.NewBackendClient(ws.backendConnection)
-	_, err := client.RegisterConnection(ctx, &pb.RegisterConnectionRequest{
-		RequestId: "regster connection request id",
-		Connection: &pb.Connection{
-			UserId:    hostname,
-			Hostname:  hostname,
-			Websocket: ws.Hostname,
-			Resource:  resource,
-		},
-	})
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	// Send the request onto the remotedialer.Server
-	ws.server.ServeHTTP(w, req)
+	s.server.ServeHTTP(w, req)
+
 	// Delete the proxy that has corresponding clientID
-	ws.removeProxy(hostname)
-}
+	s.removeProxy(hostname)
 
-func (ws *Server) checkClientAuthentication(clientID string) (authed bool, err error) {
-	if clientID == "" {
-		authed = false
-		err := fmt.Errorf("authorizer: missing %q header", messages.HostnameHeaderKey)
-		// err = errors.New(Sprintf("authorizer: missing clientID header")
-		return authed, err
-	}
-	// TODO: Use OAuth
-
-	// cfg := oauth.NewClientConfig("https://accounts.google.com")
-
-	// http.HandleFunc("/", cfg.LoginUser)
-	// http.HandleFunc("/auth/google/callback", cfg.CallbackHandler)
-
-	// log.Printf("listening on http://%s/", "127.0.0.1:5556")
-	// log.Fatal(http.ListenAndServe("127.0.0.1:5556", nil))
-
-	// Validate the client who is connecting
-	// we make sure that they are actually who they claim they are
-	// If they are not who they say they are, we return authed = false
-	// and return err = "uh-oh, someone is not authenticated"
-	return true, nil
-}
-
-func (ws *Server) authorizer(req *http.Request) (clientID string, authed bool, err error) {
-	// Extract the clientID off of the incoming req
-	clientID = req.Header.Get(messages.HostnameHeaderKey)
-	log.Printf("Server.authorizer: Authorizing clientID: %s", clientID)
-	// TODO ADD ERROR CHECKING
-	authed, err = ws.checkClientAuthentication(clientID)
-	if !authed {
-		return
-	}
-	log.Printf("Server.authorizer: Successful Authorization")
-	ws.Router.GetProxy(ws.server, clientID)
-	return
 }
