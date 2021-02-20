@@ -1,24 +1,35 @@
 FROM golang:alpine AS builder 
 
 RUN mkdir -p /duplexity ~/.ssh
-# Copy these files for better caching
-COPY go.mod go.sum /duplexity/
 
+# Install basic utilities
 RUN apk update && \
     apk upgrade && \
     apk add --no-cache \
-        bash \
-        git \
-        openssh
-# Dynamic Variable for different apps
+    bash \
+    git \
+    openssh
+
+# Copy these files for better caching
+COPY go.mod go.sum /duplexity/
+
+WORKDIR /duplexity
+# Fetch go dependencies
+RUN go mod download
+
+# Dynamic variable for different apps
 ARG APPTYPE
-ENV APPTYPE ${APPTYPE}
+
 # Copy Entire repo into folder 
 COPY . /duplexity
 WORKDIR /duplexity/cmd/${APPTYPE}
+
+RUN echo ${APPTYPE}
+
 # Create binary in binary folder 
-RUN ["go", "build", "-o", "/duplexity/binary/duplexity"]
-RUN ["echo", "$APPTYPE" , ">", "/duplexity/binary/APPTYPE.txt"]
+RUN go build -o /duplexity/binary/duplexity
+RUN echo ${APPTYPE} > /duplexity/binary/APPTYPE.txt
+
 # Create a bare image for binary to live in
 FROM alpine
 
