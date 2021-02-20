@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
-	"net/url"
-	"time"
 
 	"github.com/caarlos0/env"
+	"github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/gorilla/websocket"
 )
 
@@ -21,14 +21,14 @@ var (
 	controlConnection *websocket.Conn
 	disconnectChan    chan bool
 	messagesChan      chan jsonCommand
+	dataURI           string
 )
 
 func authorizer(protocol, address string) bool {
 	return true
 }
 func startControlConnection(websocketURI, clientID string) *websocket.Conn {
-	url := url.URL{Scheme: "ws", Host: "websocket:8080", Path: "/control"}
-	conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("%s/control", websocketURI), nil)
 	if err != nil {
 		log.Fatal("dial", err)
 	}
@@ -44,43 +44,43 @@ func init() {
 	log.Printf("%+v\n", config)
 }
 func main() {
+	log.Println("starting client")
 	ctx := context.Background()
-	resource := flag.String("resource", "MISSING", "Application to be hauled")
-	if *resource == "MISSING" {
-		log.Fatal("need resource")
+	log.Println("huh. we here yet?")
+	resource := flag.String("resource", "http://hello", "Application to be hauled")
+	if *resource == "" {
+		log.Fatalln("need resource")
 	}
 
 	controlConnection = startControlConnection(config.WebsocketURI, config.ClientID)
 	defer controlConnection.Close()
 	// Listen for server Responses
+	messagesChan = make(chan jsonCommand)
 	go listen()
 
+	log.Println("ENSURE CONNECTION AT SERVER AND SET BACKEND")
 	// Ensure connection at server is ok
-	write(getDataURI)
+	writeControlMessage(messages.GetDataURI)
+	log.Println("WAITING FOR MESSAGE FROM SERVER")
 	uriResponse := <-messagesChan
+	log.Println("RECEIVED MESSAGE SETTING WEBSCOKET URI")
 	err := setWebsocketURI(uriResponse)
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	// log.Println("CHECK IF CONNECTION IS THERE. ")
 	// Check if server is ok.
-	write(registerConnection)
+	// writeControlMessage(registerConnection)
+	log.Println("STARTING REMOTE DIALER CONNECTION ")
+	go startConnection(ctx, *resource)
+
+	log.Println("Waiting for response from websocket")
 	connectionResponse := <-messagesChan
-	go startConnection(ctx, *resource, connectionResponse)
+	log.Printf("Got back response from websocket: %s\n", connectionResponse)
 
-	ticker := time.NewTicker((time.Minute))
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-disconnectChan:
-			log.Println("Disconnect successful")
-			return
-		case <-ticker.C:
-			write(updateTTL)
-		default:
-			log.Println("Not a supported command")
-		}
-	}
+	go listenTerminate()
+	setupCloseHandler()
 
 }
+
+// WHY IS THIS NOWF WJATTTT

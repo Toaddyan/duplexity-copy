@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/duplexityio/duplexity/cmd/backend/pb"
 	"github.com/duplexityio/duplexity/pkg/messages"
 )
 
@@ -42,6 +43,31 @@ func (s *Server) authorizer(req *http.Request) (clientID string, authed bool, er
 		return
 	}
 	log.Printf("Server.authorizer: Successful Authorization")
+	client, present := s.getClient(clientID)
+	if !present {
+		log.Fatal("Control Plane is not established")
+	}
 	s.Router.GetProxy(s.server, clientID)
+	s.registerConnection(clientID, req)
+	client.wrapWriteControlMessage(messages.RegisteredConnection)
+
 	return
+}
+
+func (s *Server) registerConnection(clientID string, req *http.Request) {
+	ctx := req.Context()
+	resource := req.Header.Get(messages.ResourceHeaderKey)
+	client := pb.NewBackendClient(s.hub.backendConnection)
+	_, err := client.RegisterConnection(ctx, &pb.RegisterConnectionRequest{
+		RequestId: "regster connection request id",
+		Connection: &pb.Connection{
+			UserId:    clientID,
+			Hostname:  clientID,
+			Websocket: s.WsHostName,
+			Resource:  resource,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }

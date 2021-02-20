@@ -1,6 +1,8 @@
 package server
 
 import (
+	"sync"
+
 	"google.golang.org/grpc"
 )
 
@@ -11,10 +13,11 @@ type subscription struct {
 
 type message struct {
 	data     []byte
-	hostname string
+	clientID string
 }
 
 type hub struct {
+	l                 sync.Mutex
 	backendConnection *grpc.ClientConn
 	clientMap         map[string]*Client
 	register          chan *Client
@@ -36,20 +39,23 @@ func newHub(backendConnection *grpc.ClientConn) hub {
 func (h *hub) run() {
 	for {
 		select {
-		case c := <-h.register:
-			h.clientMap[c.hostname] = c
+		case client := <-h.register:
+			h.l.Lock()
+			h.clientMap[client.clientID] = client
+			h.l.Unlock()
+			go client.sendPump()
 
-		case c := <-h.unregister:
-			_, present := h.clientMap[c.hostname]
+		case client := <-h.unregister:
+			_, present := h.clientMap[client.clientID]
 			if present {
-				delete(h.clientMap, c.hostname)
-				close(c.send)
+				delete(h.clientMap, client.clientID)
+				close(client.send)
 			}
-		case m := <-h.broadcast:
-			for _, client := range h.clientMap {
-				client.send <- m
+			// case message := <-h.broadcast:
+			// 	for _, client := range h.clientMap {
+			// 		client.send <- message
 
-			}
+			// 	}
 		}
 	}
 }

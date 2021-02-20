@@ -5,28 +5,20 @@ import (
 	"log"
 )
 
-// Command constants
-const (
-	registerConnection = "registerconnection"
-	getDataURI         = "getDataURI"
-	updateTTL          = "updatettl"
-	disconnect         = "disconnect"
-)
-
 func jsonErrorHandler() {
 	log.Panic("Error Marshal/Unmarshal Object")
 }
 func newCommand(command string) jsonCommand {
 	return jsonCommand{
-		clientID: config.ClientID,
-		command:  command,
+		ClientID: config.ClientID,
+		Command:  command,
 	}
 }
 
 type jsonCommand struct {
-	clientID string   `json:"clientid"`
-	command  string   `json:"command"`
-	args     []string `json:"arguements"`
+	ClientID string
+	Command  string
+	Args     []string
 }
 
 // byteToStruct converts rawMessage into struct
@@ -35,17 +27,19 @@ func byteToStruct(rawMessage []byte) jsonCommand {
 	cmdStruct := jsonCommand{}
 	err := json.Unmarshal(rawMessage, &cmdStruct)
 	if err != nil {
-		jsonErrorHandler()
+		log.Panicf("Could not unmarshal: %v", err)
 	}
 	return cmdStruct
 }
 
 // converts struct into []byte
-func structToByte(cmd interface{}) []byte {
+func structToByte(cmd jsonCommand) []byte {
+	log.Println("Converting cmd ", cmd, " to bytes")
 	rawMessage, err := json.Marshal(cmd)
 	if err != nil {
-		jsonErrorHandler()
+		log.Panicf("Could not marshal: %v", err)
 	}
+	log.Println("CONVERTED to string", string(rawMessage))
 	return rawMessage
 
 }

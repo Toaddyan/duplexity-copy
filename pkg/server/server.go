@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/duplexityio/duplexity/pkg/messages"
 	"github.com/duplexityio/duplexity/pkg/router"
@@ -20,7 +19,6 @@ var upgrader = websocket.Upgrader{
 
 // Server is a remotedialer websocket that also contains a reverse proxy to each client
 type Server struct {
-	l          sync.Mutex
 	server     *remotedialer.Server
 	Router     *router.Router
 	Port       int
@@ -76,19 +74,20 @@ func (s *Server) getClient(hostname string) (*Client, bool) {
 func (s *Server) readControlInput(req *http.Request, ws *websocket.Conn) {
 	for {
 		_, rawMessage, err := ws.ReadMessage()
+		log.Println("Received", string(rawMessage))
 		if err != nil {
 			log.Println("could not read: ", err)
 		}
 		cmdStruct := byteToStruct(rawMessage)
-
-		switch cmdStruct.command {
-		case getDataURI:
-			s.respondDataURI(cmdStruct, ws, req)
-		case registerConnection:
-			s.responseConnection(cmdStruct, ws)
-		case disconnect:
-			s.disconnect(cmdStruct.clientID, ws)
-		case updateTTL:
+		log.Println("GOT A ", cmdStruct.Command)
+		switch cmdStruct.Command {
+		case messages.GetDataURI:
+			s.respondDataURI(cmdStruct, ws)
+		// case registerConnection:
+		// 	s.responseConnection(req, cmdStruct, ws)
+		case messages.Disconnect:
+			s.disconnect(cmdStruct.ClientID, ws)
+		case messages.UpdateTTL:
 			log.Println("want to update ttl here")
 
 		default:
@@ -105,6 +104,7 @@ func (s *Server) controlHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Fatal("can't upgrade to websocket")
 	}
+	defer ws.Close()
 
 	s.readControlInput(req, ws)
 }

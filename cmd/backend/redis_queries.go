@@ -6,6 +6,21 @@ import (
 	"github.com/duplexityio/duplexity/cmd/backend/pb"
 )
 
+func hdelConnection(hostName string, connection *pb.Connection) (err error) {
+	connectionJSON, err := json.Marshal(connection)
+	if err != nil {
+		return err
+	}
+
+	query := Redis.HDel("connections", hostName, string(connectionJSON))
+	_, err = query.Result()
+	if err != nil {
+		return err
+	}
+
+	return
+}
+
 // TODO: Use the entireity of a Redis database, instead of a hash table
 //       That way, we can set a TTL (expiration) on each entry
 func hsetConnection(hostName string, connection *pb.Connection) (err error) {

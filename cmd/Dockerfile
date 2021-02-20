@@ -1,15 +1,15 @@
-FROM toaddyan/duplexity:latest AS builder 
+FROM golang:alpine AS builder 
 
-# RUN mkdir -p /duplexity ~/.ssh
-# # Copy these files for better caching
-# COPY go.mod go.sum /duplexity/
+RUN mkdir -p /duplexity ~/.ssh
+# Copy these files for better caching
+COPY go.mod go.sum /duplexity/
 
-# RUN apk update && \
-#     apk upgrade && \
-#     apk add --no-cache \
-#         bash \
-#         git \
-#         openssh
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache \
+        bash \
+        git \
+        openssh
 # Dynamic Variable for different apps
 ARG APPTYPE
 ENV APPTYPE ${APPTYPE}

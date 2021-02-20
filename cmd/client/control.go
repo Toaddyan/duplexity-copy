@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -27,17 +26,20 @@ const (
 func listen() {
 	for {
 		_, rawMessage, err := controlConnection.ReadMessage()
+		log.Println("RECEIVED A MESSAGE", string(rawMessage))
 		if err != nil {
 			log.Panic(err)
 		}
+		log.Println("convert byte to struct")
 		cmdStruct := byteToStruct(rawMessage)
-
-		if cmdStruct.clientID == config.ClientID {
-			if cmdStruct.command == disconnect {
-				disconnectChan <- true
-			}
+		log.Println("client ID: ", cmdStruct.ClientID, "and", config.ClientID)
+		if cmdStruct.ClientID == config.ClientID {
+			log.Println("clients match ")
 			messagesChan <- cmdStruct
+			log.Println("sent message")
 		}
+		log.Println("listen done ")
+
 	}
 }
 func connect(ctx context.Context, resource string) {
@@ -46,26 +48,23 @@ func connect(ctx context.Context, resource string) {
 		// Needs to be changed
 		messages.ResourceHeaderKey: []string{resource},
 	}
-	remotedialer.ClientConnect(ctx, fmt.Sprintf("%s/backend", config.WebsocketURI), headers, nil, authorizer, nil)
+	remotedialer.ClientConnect(ctx, config.WebsocketURI, headers, nil, authorizer, nil)
 
 }
-func startConnection(ctx context.Context, resource string, cmd jsonCommand) error {
-	if cmd.command != registerConnection {
-		return errors.New("unexpected servr Response")
-	}
+func startConnection(ctx context.Context, resource string) {
 	connect(ctx, resource)
-	return nil
 }
 
 func setWebsocketURI(cmd jsonCommand) error {
-	if cmd.command != getDataURI {
+	log.Println("SETWEBSOCKET URI")
+	if cmd.Command != messages.GetDataURI {
 		return errors.New("unexpected servr Response")
 	}
-	if len(cmd.args) == 0 {
+	if len(cmd.Args) == 0 {
 		return errors.New("No args in Response")
 	}
 
-	config.WebsocketURI = cmd.args[2]
+	config.WebsocketURI = cmd.Args[0]
 	log.Println("Set WebsocketURI to ", config.WebsocketURI)
 	return nil
 }
@@ -76,29 +75,52 @@ func setWebsocketURI(cmd jsonCommand) error {
 // 	rawMessage := structToByte(cmdStruct)
 // }
 
-func write(cmd string, args ...string) {
+func writeControlMessage(cmd string, args ...string) {
 	cmdStruct := newCommand(cmd)
 	if args != nil {
 		for _, arg := range args {
-			cmdStruct.args = append(cmdStruct.args, arg)
+			cmdStruct.Args = append(cmdStruct.Args, arg)
 		}
 	}
+	log.Println("cmdID ", cmdStruct.ClientID, " cmd", cmdStruct.Command)
 	rawMessage := structToByte(cmdStruct)
+	log.Println("SENDING MESSAGE:", string(rawMessage))
 	controlConnection.WriteMessage(websocket.TextMessage, rawMessage)
 }
 
+func listenTerminate() {
+	ticker := time.NewTicker((time.Minute))
+	defer ticker.Stop()
+	for {
+		select {
+		case msg := <-messagesChan:
+			if msg.Command == messages.Disconnect {
+				log.Println("messages.Disconnect successful")
+				disconnectChan <- true
+				return
+			}
+		case <-ticker.C:
+			writeControlMessage(messages.UpdateTTL)
+
+			// log.Println("Not a supported command %+v", msg)
+		}
+	}
+}
+
+// blocking
 func setupCloseHandler() {
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		fmt.Println("Ctrl+C pressed: Disconnecting...")
-		cmd := jsonCommand{
-			clientID: config.ClientID,
-			command:  disconnect,
+
+	for {
+		select {
+		case <-c:
+			log.Println("terminating")
+			return
+		case <-disconnectChan:
+			log.Println("disconnecting")
+			return
+
 		}
-		rawMessage := structToByte(cmd)
-		controlConnection.WriteMessage(websocket.TextMessage, rawMessage)
-		return
-	}()
+	}
 }

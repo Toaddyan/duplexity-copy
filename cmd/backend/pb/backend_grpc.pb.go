@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion7
 type BackendClient interface {
 	RegisterConnection(ctx context.Context, in *RegisterConnectionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetConnection(ctx context.Context, in *GetConnectionRequest, opts ...grpc.CallOption) (*GetConnectionResponse, error)
+	RemoveConnection(ctx context.Context, in *RemoveConnectionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type backendClient struct {
@@ -49,12 +50,22 @@ func (c *backendClient) GetConnection(ctx context.Context, in *GetConnectionRequ
 	return out, nil
 }
 
+func (c *backendClient) RemoveConnection(ctx context.Context, in *RemoveConnectionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/backend.Backend/RemoveConnection", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendServer is the server API for Backend service.
 // All implementations must embed UnimplementedBackendServer
 // for forward compatibility
 type BackendServer interface {
 	RegisterConnection(context.Context, *RegisterConnectionRequest) (*emptypb.Empty, error)
 	GetConnection(context.Context, *GetConnectionRequest) (*GetConnectionResponse, error)
+	RemoveConnection(context.Context, *RemoveConnectionRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedBackendServer()
 }
 
@@ -67,6 +78,9 @@ func (UnimplementedBackendServer) RegisterConnection(context.Context, *RegisterC
 }
 func (UnimplementedBackendServer) GetConnection(context.Context, *GetConnectionRequest) (*GetConnectionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConnection not implemented")
+}
+func (UnimplementedBackendServer) RemoveConnection(context.Context, *RemoveConnectionRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveConnection not implemented")
 }
 func (UnimplementedBackendServer) mustEmbedUnimplementedBackendServer() {}
 
@@ -117,6 +131,24 @@ func _Backend_GetConnection_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Backend_RemoveConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveConnectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServer).RemoveConnection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/backend.Backend/RemoveConnection",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServer).RemoveConnection(ctx, req.(*RemoveConnectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Backend_ServiceDesc is the grpc.ServiceDesc for Backend service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -131,6 +163,10 @@ var Backend_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetConnection",
 			Handler:    _Backend_GetConnection_Handler,
+		},
+		{
+			MethodName: "RemoveConnection",
+			Handler:    _Backend_RemoveConnection_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -9,6 +9,7 @@ import (
 	"github.com/duplexityio/duplexity/pkg/server"
 )
 
+// TODO FIX HOSTNAME
 var config struct {
 	HTTPPort          int    `env:"HTTP_PORT" envDefault:"8080"`
 	Hostname          string `env:"WEBSOCKET_HOSTNAME"`

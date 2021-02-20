@@ -52,3 +52,11 @@ If i'm trying to target a specific client, then we need to have all of these web
 
 Who is the broker? 
 The websocket should be a broker to the clients 
+
+===
+# Duplexity Speedrun
+
+## Client Conneceting to Duplexity
+
+1. Client connects control websocket with 
+2. Control websocket

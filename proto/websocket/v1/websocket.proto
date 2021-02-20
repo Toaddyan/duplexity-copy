@@ -1,0 +1,25 @@
+syntax = "proto3";
+package websocket;
+
+option go_package = ".;pb";
+
+import "websocket/v1/messages.proto";
+import "backend/v1/backend.proto";
+
+message GetDataPlaneUriRequest {
+    Client client = 1;
+}
+message GetDataPlaneUriResponse {
+    string data_plane_uri = 1;
+}
+
+message TextNotification {
+    string text = 1;
+}
+
+message ClientRequest {
+    oneof RequestType {
+       GetDataPlaneUriRequest get_data_plane_uri_request = 1;
+       backend.RegisterConnectionRequest register_connection_request = 2;
+    } 
+}
