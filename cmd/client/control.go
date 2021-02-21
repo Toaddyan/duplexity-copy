@@ -21,10 +21,13 @@ func dialControlConnection(ControlWebsocketURI, clientID string) {
 func sendDiscoveryRequest(clientID string) {
 	discoveryRequest := messages.DiscoveryRequest{
 		Client: &messages.Client{
-			config.ClientID,
+			ID: config.ClientID,
 		},
 	}
 	controlMessageBytes, err := messages.MessageToControlMessageBytes(discoveryRequest)
+	if err != nil {
+		log.Panicf("%v", err)
+	}
 	sendChannel <- controlMessageBytes
 }
 
@@ -34,8 +37,18 @@ func processDiscoveryResponse() string {
 		controlCommand := <-readChannel
 		if controlCommand.MessageType == "DiscoveryResponse" {
 			// message := messages.DiscoveryResponse{}
-			message, err := messages.ControlMessageToMessage(controlCommand.Message)
-			return message.DataPlaneURI
+			message, err := messages.ControlMessageToMessage(controlCommand)
+			if err != nil {
+				log.Panic(err)
+			}
+			fmt.Println(message)
+			return ""
+			// TODO Have to use this unmarshal method rather than reflect
+			// err := json.Unmarshal([]byte(controlCommand.Message), &message)
+			// if err != nil {
+			// 	log.Panicf("%+v\n", err)
+			// }
+			// return message.DataPlaneURI
 		}
 	}
 }

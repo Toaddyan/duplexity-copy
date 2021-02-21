@@ -13,6 +13,7 @@ func registerControlMessageType(controlMessage interface{}) {
 }
 
 func init() {
+	controlMessageTypeRegister = make(map[string]reflect.Type)
 	registerControlMessageType(DiscoveryRequest{})
 	registerControlMessageType(DiscoveryResponse{})
 	registerControlMessageType(PipesRegistered{})

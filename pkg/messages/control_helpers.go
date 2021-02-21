@@ -67,7 +67,7 @@ func MessageToControlMessageBytes(message interface{}) (controlMessageBytes []by
 		return
 	}
 	controlMessage := ControlMessage{
-		MessageType: reflect.TypeOf(message).Name(),
+		MessageType: reflect.TypeOf(message).String(),
 		Message:     string(messageJSONBytes),
 	}
 	controlMessageBytes, err = json.Marshal(controlMessage)
@@ -86,3 +86,7 @@ func getEmptyMessageObject(controlType string) (interface{}, error) {
 	}
 	return reflect.New(messageType).Elem().Interface(), nil
 }
+
+// func newMessage(controlMessage ControlMessage) {
+
+// }

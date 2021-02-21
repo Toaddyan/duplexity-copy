@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	// ControlConnection is websocket connection to the server for the control plane
 	ControlConnection *websocket.Conn
 	sendChannel       chan []byte
 	readChannel       chan messages.ControlMessage
@@ -26,9 +27,14 @@ func init() {
 		log.Fatalf("%+v\n", err)
 	}
 	log.Printf("%+v\n", config)
+
 }
 
 func main() {
+	sendChannel = make(chan []byte)
+	readChannel = make(chan messages.ControlMessage)
+	pingChannel = make(chan bool, 1)
+
 	dialControlConnection(config.ControlWebsocketURI, config.ClientID)
 	go readPump()
 

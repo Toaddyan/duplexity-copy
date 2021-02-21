@@ -32,6 +32,9 @@ func readPump() {
 		if mt == websocket.TextMessage {
 			log.Println("Received a message: ", string(controlMessageBytes))
 			controlMessage, err := messages.ControlMessageBytesToControlMessage(controlMessageBytes)
+			if err != nil {
+				log.Panicf("%v\n", err)
+			}
 			readChannel <- controlMessage
 		}
 	}
