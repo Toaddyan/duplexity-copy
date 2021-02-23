@@ -1,0 +1,31 @@
+syntax="proto3";
+
+package messages;
+
+option go_package = ".;messagespb";
+
+message ControlMessage {
+    string ClientID = 1;
+    oneof MessageType {
+        DiscoveryRequest discoveryRequest = 2;
+        DiscoveryResponse discoveryResponse = 3;
+        PipesRegistered pipesRegistered = 4;
+        ForceDisconnect disconnect = 5;
+    }
+}
+
+message Client {
+    string ClientID = 1;
+}
+message DiscoveryRequest {
+    Client Client = 1;
+}
+message DiscoveryResponse {
+    string DataPlaneURI = 1;
+}
+message PipesRegistered {
+    bool Successful = 1;
+}
+message ForceDisconnect {
+    bool Successful = 1;
+}
