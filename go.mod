@@ -10,6 +10,7 @@ require (
 	github.com/go-redis/redis/v8 v8.5.0 // indirect
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/websocket v1.4.0
 	github.com/rancher/remotedialer v0.2.5
 	golang.org/x/net v0.0.0-20210119194325-5f4716e94777 // indirect
 	golang.org/x/oauth2 v0.0.0-20210210192628-66670185b0cd // indirect

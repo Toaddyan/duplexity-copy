@@ -2,25 +2,29 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
-	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/caarlos0/env"
-	"github.com/duplexityio/duplexity/pkg/messages"
-	"github.com/rancher/remotedialer"
+	messagespb "github.com/duplexityio/duplexity/pkg/messages/pb"
+	"github.com/gorilla/websocket"
 )
 
-func authorizer(protocol string, address string) bool {
-	// this function should compare the protocol with the address
-	return true
-}
-
-var clientID string
-
+var (
+	// ControlConnection is websocket connection to the server for the control plane
+	ControlConnection *websocket.Conn
+	dataPlaneURI      string
+	sendChannel       chan messagespb.ControlMessage
+	readChannel       chan messagespb.ControlMessage
+	pingChannel       chan bool
+	disconnect        chan bool
+)
 var config struct {
-	WebsocketURI string `env:"WEBSOCKET_URI" envDefault:"ws://localhost:8080"`
-	ClientID     string `env:"CLIENT_ID" envDefault:"client"`
+	ControlWebsocketURI string `env:"WEBSOCKET_URI" envDefault:"ws://localhost:8080"`
+	ClientID            string `env:"CLIENT_ID" envDefault:"client"`
 }
 
 func init() {
@@ -30,23 +34,47 @@ func init() {
 		log.Fatalf("%+v\n", err)
 	}
 	log.Printf("%+v\n", config)
+
 }
 
 func main() {
-	// Redirect the user to oauth service.
-	//  wait until user autenticates
+	resource := *flag.String("resource", "http://hello", "Application to be hauled")
+	sendChannel = make(chan messagespb.ControlMessage)
+	readChannel = make(chan messagespb.ControlMessage)
+	pingChannel = make(chan bool, 1)
+	disconnect = make(chan bool, 1)
 
-	// Check -> Am I authenticated...
+	log.Println("Starting ControlConnection")
+	dialControlConnection(config.ControlWebsocketURI, config.ClientID)
+	defer ControlConnection.Close()
 
-	//  in linux machine... it goes into ~/.config
-	//  Be able to look for this in platform agnostic way
-	//  hydrate a jwt and dehydrate a JWT  encode decode ?
-	ctx := context.Background()
+	// ControlConnection Pumps
+	go readPump()
+	go writePump()
+	go pingHandler(config.ClientID)
 
-	headers := http.Header{
-		// add to the headers... here are the credentials.
-		messages.ClientIDHeaderKey: []string{config.ClientID},
-		messages.ResourceHeaderKey: []string{"http://hello"},
+	// Sending DiscoveryRequest
+	sendDiscoveryRequest(config.ClientID)
+	dataPlaneURI, err := processDiscoveryResponse(config.ClientID)
+	if err != nil {
+		log.Fatal(err)
 	}
-	remotedialer.ClientConnect(ctx, fmt.Sprintf("%s/backend", config.WebsocketURI), headers, nil, authorizer, nil)
+	// Connecting to DataPlane using Remote Dialer for Proxy Service
+	log.Println("Building RemoteDialer Pipe")
+	go buildPipes(context.Background(), config.ClientID, dataPlaneURI, resource)
+
+	// Listen For ControlMessages from server
+	go listen()
+	// Termination channels
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	for {
+		select {
+		case <-c:
+			log.Println("ctrl-c pressed, terminating")
+		case <-disconnect:
+			log.Println("Disconnecting")
+			return
+		}
+	}
 }
