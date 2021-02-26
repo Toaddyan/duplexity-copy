@@ -2,30 +2,38 @@ syntax="proto3";
 
 package messages;
 
+// import "google/protobuf/any.proto";
+
 option go_package = ".;messagespb";
+
+// message ControlMessage {
+//     string ClientID = 1; 
+//     google.protobuf.Any MessageType = 2;
+// }
+
 
 message ControlMessage {
     string ClientID = 1;
     oneof MessageType {
         DiscoveryRequest discoveryRequest = 2;
         DiscoveryResponse discoveryResponse = 3;
-        PipesRegistered pipesRegistered = 4;
-        ForceDisconnect disconnect = 5;
+        PipesRegisteredRequest pipesRequest = 4;
+        PipesRegisteredResponse pipesResponse = 5;
+        DisconnectRequest disconnectRequest = 6;
+        DisconnectResponse disconnectResponse = 7;
     }
 }
 
 message Client {
     string ClientID = 1;
 }
-message DiscoveryRequest {
-    Client Client = 1;
-}
+message DiscoveryRequest {}
 message DiscoveryResponse {
     string DataPlaneURI = 1;
 }
-message PipesRegistered {
+message PipesRegisteredRequest {}
+message PipesRegisteredResponse {
     bool Successful = 1;
 }
-message ForceDisconnect {
-    bool Successful = 1;
-}
+message DisconnectRequest {}
+message DisconnectResponse {}

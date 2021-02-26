@@ -2,42 +2,53 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
+	"time"
 
-	"github.com/caarlos0/env/v6"
+	"github.com/caarlos0/env"
 	"github.com/duplexityio/duplexity/pkg/router"
-	"github.com/duplexityio/duplexity/pkg/server"
+	"google.golang.org/grpc"
 )
 
 var config struct {
-	HTTPPort          int    `env:"HTTP_PORT" envDefault:"8080"`
-	Hostname          string `env:"WEBSOCKET_HOSTNAME"`
-	BackendGrpcServer string `env:"BACKEND_GRPC_SERVER" envDefaut:"localhost:9378"`
+	HTTPPort          int           `env:"HTTP_PORT" envDefault:"8080"`
+	Hostname          string        `env:"WEBSOCKET_HOSTNAME"`
+	BackendGrpcServer string        `env:"BACKEND_GRPC_SERVER" envDefaut:"localhost:9378"`
+	WriteWait         time.Duration `env:"WRITE_WAIT" envDefault:"10s"`
+	PongWait          time.Duration `env:"PONG_WAIT" envDefault:"60s"`
+	PingPeriod        time.Duration `env:"PING_PERIOD" envDefault:"54s"`
+	MaxMessageSize    int64         `env:"MAX_MESSAGE_SIZE" envDefault:"512"`
 }
+
+var (
+	// BackendGrpcConnection is a connection to go to the backend
+	BackendGrpcConnection *grpc.ClientConn
+)
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Llongfile)
-
 	err := env.Parse(&config)
 	if err != nil {
 		log.Fatalf("%+v\n", err)
 	}
 	log.Printf("%+v\n", config)
-
 	if config.Hostname == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
-			log.Fatalf("Could not determine hostname: %v\n", err)
+			log.Fatalf("could not determine hostname: %v\n", err)
 		}
 		config.Hostname = hostname
 	}
+	BackendGrpcConnection, err = grpc.Dial(config.BackendGrpcServer, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("could not connect to backendgRPC server: %v\n", err)
+	}
 }
-
 func main() {
-	// Forward-facing router
 	router := router.New()
-
-	// Websocket server
-	server := server.New(router, config.HTTPPort, config.Hostname, config.BackendGrpcServer)
-	server.Serve()
+	server := NewServer(router, config.HTTPPort, config.Hostname, BackendGrpcConnection)
+	
+	http.HandleFunc("/backend", server.remotedialerHandler)
+	http.HandleFunc("/frontend", server.Router.ServeHTTP)
 }

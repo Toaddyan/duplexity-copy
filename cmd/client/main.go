@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -13,6 +14,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// const dataPlaneURI = "websocket"
+
 var (
 	// ControlConnection is websocket connection to the server for the control plane
 	ControlConnection *websocket.Conn
@@ -21,9 +24,11 @@ var (
 	readChannel       chan messagespb.ControlMessage
 	pingChannel       chan bool
 	disconnect        chan bool
+	controlLock       bool
+	pipeLock          bool
 )
 var config struct {
-	ControlWebsocketURI string `env:"WEBSOCKET_URI" envDefault:"ws://localhost:8080"`
+	ControlWebsocketURI string `env:"CONTROL_WEBSOCKET_URI" envDefault:"ws://localhost:8081"`
 	ClientID            string `env:"CLIENT_ID" envDefault:"client"`
 }
 
@@ -51,20 +56,36 @@ func main() {
 	// ControlConnection Pumps
 	go readPump()
 	go writePump()
-	go pingHandler(config.ClientID)
+	go pingHandler()
 
 	// Sending DiscoveryRequest
-	sendDiscoveryRequest(config.ClientID)
-	dataPlaneURI, err := processDiscoveryResponse(config.ClientID)
+	// sendDiscoveryRequest()
+	err := sendRequest("discoveryRequest")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	controlLock = true
+	dataPlaneURI, err := listen()
+	if err != nil {
+		log.Fatalf("%v", err)
+		return
+	}
+
 	// Connecting to DataPlane using Remote Dialer for Proxy Service
 	log.Println("Building RemoteDialer Pipe")
-	go buildPipes(context.Background(), config.ClientID, dataPlaneURI, resource)
+	go buildPipes(context.Background(), fmt.Sprintf("%v", dataPlaneURI), resource)
+	// Send request to Server to check if pipes are registered
+	sendRequest("pipesRequest")
+	pipeStatus, err := listen()
+	if pipeStatus != true || err != nil {
+		log.Fatalf("Unable to setup pipe connection")
+		return
+	}
 
 	// Listen For ControlMessages from server
 	go listen()
+
 	// Termination channels
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -72,6 +93,9 @@ func main() {
 		select {
 		case <-c:
 			log.Println("ctrl-c pressed, terminating")
+
+			sendRequest("disconnectRequest")
+			return
 		case <-disconnect:
 			log.Println("Disconnecting")
 			return
