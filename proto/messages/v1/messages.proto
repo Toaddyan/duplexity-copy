@@ -31,7 +31,9 @@ message DiscoveryRequest {}
 message DiscoveryResponse {
     string DataPlaneURI = 1;
 }
-message PipesRegisteredRequest {}
+message PipesRegisteredRequest {
+    string Resource = 1;
+}
 message PipesRegisteredResponse {
     bool Successful = 1;
 }

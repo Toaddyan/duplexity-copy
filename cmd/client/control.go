@@ -23,16 +23,6 @@ func dialControlConnection(controlWebsocketURI, clientID string) {
 
 	return
 }
-func sendDiscoveryRequest() {
-	controlMessage := &messagespb.ControlMessage{
-		ClientID: config.ClientID,
-		MessageType: &messagespb.ControlMessage_DiscoveryRequest{
-			DiscoveryRequest: &messagespb.DiscoveryRequest{},
-		},
-	}
-	sendChannel <- *controlMessage
-	return
-}
 
 func sendRequest(cmd string) error {
 	// controlMessage, err := messagespb.WrapCommand(req, config.ClientID)
@@ -45,7 +35,9 @@ func sendRequest(cmd string) error {
 
 		controlMessage = &messagespb.ControlMessage{
 			ClientID:    config.ClientID,
-			MessageType: &messagespb.ControlMessage_DisconnectRequest{},
+			MessageType: &messagespb.ControlMessage_DisconnectRequest{
+				DisconnectRequest: &messagespb.DisconnectRequest{},
+			},
 		}
 
 	case "discoveryRequest":
@@ -59,13 +51,17 @@ func sendRequest(cmd string) error {
 	case "pipesRequest":
 		controlMessage = &messagespb.ControlMessage{
 			ClientID:    config.ClientID,
-			MessageType: &messagespb.ControlMessage_PipesRequest{},
+			MessageType: &messagespb.ControlMessage_PipesRequest{
+				PipesRequest: &messagespb.PipesRegisteredRequest{
+					Resource: resource,
+				},
+			},
 		}
 	default:
 		return errors.New("wrong command ")
 	}
 
-	sendChannel <- *controlMessage
+	sendChannel <- controlMessage
 	return nil
 }
 
@@ -119,7 +115,7 @@ func listen() (interface{}, error) {
 			return pipeStatus, nil
 		// Check for Disconnects from the server
 		case *messagespb.ControlMessage_DisconnectResponse:
-			log.Printf("You have been disconnected by the server %v")
+			log.Printf("You have been disconnected by the server")
 			disconnect <- true
 		default:
 			log.Panic("Unable to process Request...")

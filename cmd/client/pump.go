@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 
 	messagespb "github.com/duplexityio/duplexity/pkg/messages/pb"
@@ -15,16 +14,17 @@ func pingHandler() {
 		ControlConnection.WriteMessage(websocket.PingMessage, []byte(config.ClientID))
 	}
 }
+
 func writePump() {
 	for {
 		controlMessage := <-sendChannel
 		log.Printf("writePump has received a message: %+v", controlMessage.ClientID)
-		controlMessageBytes, err := proto.Marshal(&controlMessage)
+		controlMessageBytes, err := proto.Marshal(controlMessage)
 		if err != nil {
 			log.Panicf("%v\n", err)
 		}
-		log.Println("writingMessage")
 		ControlConnection.WriteMessage(websocket.TextMessage, controlMessageBytes)
+		log.Println("WritePump has sent message")
 	}
 }
 
@@ -43,12 +43,12 @@ func readPump() {
 
 		if mt == websocket.TextMessage {
 			controlMessage := messagespb.ControlMessage{}
-			err := json.Unmarshal(controlMessageBytes, &controlMessage)
+			err := proto.Unmarshal(controlMessageBytes, &controlMessage)
 			if err != nil {
 				log.Panicf("%v\n", err)
 			}
 			log.Println("got control mesage in read pump: ", controlMessage.GetClientID())
-			readChannel <- controlMessage
+			readChannel <- &controlMessage
 		}
 	}
 }

@@ -20,12 +20,13 @@ var (
 	// ControlConnection is websocket connection to the server for the control plane
 	ControlConnection *websocket.Conn
 	dataPlaneURI      string
-	sendChannel       chan messagespb.ControlMessage
-	readChannel       chan messagespb.ControlMessage
+	sendChannel       chan *messagespb.ControlMessage
+	readChannel       chan *messagespb.ControlMessage
 	pingChannel       chan bool
 	disconnect        chan bool
 	controlLock       bool
 	pipeLock          bool
+	resource          string
 )
 var config struct {
 	ControlWebsocketURI string `env:"CONTROL_WEBSOCKET_URI" envDefault:"ws://localhost:8081"`
@@ -39,13 +40,14 @@ func init() {
 		log.Fatalf("%+v\n", err)
 	}
 	log.Printf("%+v\n", config)
-
+	resource = *flag.String("resource", "http://hello", "Application to be hauled")
+	flag.Parse()
 }
 
 func main() {
-	resource := *flag.String("resource", "http://hello", "Application to be hauled")
-	sendChannel = make(chan messagespb.ControlMessage)
-	readChannel = make(chan messagespb.ControlMessage)
+
+	sendChannel = make(chan *messagespb.ControlMessage)
+	readChannel = make(chan *messagespb.ControlMessage)
 	pingChannel = make(chan bool, 1)
 	disconnect = make(chan bool, 1)
 
@@ -71,10 +73,21 @@ func main() {
 		log.Fatalf("%v", err)
 		return
 	}
+	log.Println("dataplane is ", dataPlaneURI)
+	sendRequest("pipesRequest")
 
+	success, err := listen()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("successful: ", success)
+	log.Println("*******STOPPING POINT HERE*****")
+	for {
+	}
 	// Connecting to DataPlane using Remote Dialer for Proxy Service
 	log.Println("Building RemoteDialer Pipe")
 	go buildPipes(context.Background(), fmt.Sprintf("%v", dataPlaneURI), resource)
+
 	// Send request to Server to check if pipes are registered
 	sendRequest("pipesRequest")
 	pipeStatus, err := listen()
